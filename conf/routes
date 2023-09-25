@@ -10,5 +10,10 @@ GET     /                           controllers.HomeController.index
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
 
 
-GET     /github       controllers.GitHubController.index()
-GET     /github/users/:login     controllers.GitHubController.getGitHubUser(login: String)
+GET     /github                     controllers.GitHubController.index()
+GET     /github/users/:login        controllers.GitHubController.getGitHubUser(login: String)
+
+POST    /github/create              controllers.GitHubController.create()
+GET     /github/:login              controllers.GitHubController.read(login: String)
+PUT     /github/:login              controllers.GitHubController.update(login: String)
+DELETE  /github/:login              controllers.GitHubController.delete(login: String)

@@ -39,7 +39,7 @@ class GitHubRepository @Inject()(mongoComponent: MongoComponent)(implicit ec: Ex
 
     def read(login: String): Future[Either[APIError, User]] = {
         collection.find(Filters.equal("login", login)).headOption flatMap {
-            case Some(data) => Future(Right(data))
+            case Some(user: User) => Future(Right(user))
             case None => Future(Left(APIError.BadAPIResponse(404, "User not found.")))
         }
     }

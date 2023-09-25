@@ -3,7 +3,6 @@ package services
 import baseSpec.BaseSpec
 import cats.data.EitherT
 import connectors.GitHubConnector
-import org.scalatest.matchers.should.Matchers
 import models.{APIError, User}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.concurrent.ScalaFutures
