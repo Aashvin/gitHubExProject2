@@ -21,7 +21,7 @@ class GitHubConnector @Inject()(ws: WSClient) {
                     }
                 }
             }.recover {
-                case _: WSResponse => Left(APIError.BadAPIResponse(500, "Could not connect"))
+                case _: WSResponse => Left(APIError.BadAPIResponse(500, "Could not connect."))
             }
         }
     }
