@@ -1,0 +1,23 @@
+@import models.User
+@(user: User)
+
+@main("View GitHub User"){
+    <h1>View GitHub User</h1>
+}
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Title</title>
+    </head>
+    <body>
+        <p>
+            Username/Login: @user.login <br>
+            Date Created: @user.created_at <br>
+            Location: @user.location <br>
+            Number of Followers: @user.followers <br>
+            Number Following: @user.following <br>
+        </p>
+    </body>
+</html>

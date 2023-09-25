@@ -10,4 +10,5 @@ GET     /                           controllers.HomeController.index
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
 
 
-GET     /api       controllers.GitHubController.index()
+GET     /github       controllers.GitHubController.index()
+GET     /github/users/:login     controllers.GitHubController.getGitHubUser(login: String)
