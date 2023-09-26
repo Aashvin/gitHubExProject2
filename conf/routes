@@ -16,5 +16,6 @@ POST    /create              controllers.GitHubController.create()
 GET     /read/:login              controllers.GitHubController.read(login: String)
 PUT     /update/:login              controllers.GitHubController.update(login: String)
 DELETE  /delete/:login              controllers.GitHubController.delete(login: String)
+GET     /addgithubuser/:login       controllers.GitHubController.createFromGitHub(login: String)
 
 GET     /github/users/:login        controllers.GitHubController.getGitHubUser(login: String)

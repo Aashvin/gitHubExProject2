@@ -7,7 +7,7 @@ import play.api.libs.json.{JsValue, Json}
 import play.api.mvc._
 import services.{GitHubService, RepositoryService}
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class GitHubController @Inject()(val controllerComponents: ControllerComponents, val repositoryService: RepositoryService, val gitHubService: GitHubService)(implicit val ec: ExecutionContext) extends BaseController {
@@ -51,6 +51,16 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
         gitHubService.getUser(login = login).value.map {
             case Right(user: User) => Ok(views.html.viewUser(user))
             case Left(error: APIError) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
+        }
+    }
+
+    def createFromGitHub(login: String): Action[AnyContent] = Action.async { implicit request =>
+        gitHubService.getUser(login = login).value.flatMap {
+            case Right(user: User) => repositoryService.createFromGitHub(user).flatMap {
+                    case Right(user: User) => Future(Created(Json.toJson(user)))
+                    case Left(error: APIError) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
+                }
+            case Left(error: APIError) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
         }
     }
 }

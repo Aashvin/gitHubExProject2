@@ -34,4 +34,8 @@ class RepositoryService @Inject()(gitHubRepository: RepositoryTrait)(implicit ec
     def delete(login: String): Future[Either[APIError, Boolean]] = {
         gitHubRepository.delete(login)
     }
+
+    def createFromGitHub(user: User): Future[Either[APIError, User]] = {
+        gitHubRepository.create(user)
+    }
 }
