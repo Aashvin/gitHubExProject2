@@ -179,4 +179,25 @@ class RepositoryServiceSpec extends BaseSpecWithApplication with MockFactory {
             }
         }
     }
+
+    "RepositoryService .createFromGitHub()" should {
+
+        "get and return a user from the database" in {
+            (mockRepository.create(_: User)).expects(testUser)
+                .returning(Future(Right(testUser))).once()
+
+            whenReady(TestRepositoryService.createFromGitHub(testUser)) { result =>
+                result shouldBe Right(testUser)
+            }
+        }
+
+        "give a user already exists error" in {
+            (mockRepository.create(_: User)).expects(testUser)
+                .returning(Future(Left(APIError.BadAPIResponse(400, "A user with this login already exists.")))).once()
+
+            whenReady(TestRepositoryService.createFromGitHub(testUser)) { result =>
+                result shouldBe Left(APIError.BadAPIResponse(400, "A user with this login already exists."))
+            }
+        }
+    }
 }

@@ -28,7 +28,7 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
 
     def read(login: String): Action[AnyContent] = Action.async { implicit request =>
         repositoryService.read(login).map {
-            case Right(user: User) => Ok(Json.toJson(user))
+            case Right(user: User) => Ok(views.html.viewUser(user))
             case Left(error: APIError) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
         }
     }
@@ -57,7 +57,7 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
     def createFromGitHub(login: String): Action[AnyContent] = Action.async { implicit request =>
         gitHubService.getUser(login = login).value.flatMap {
             case Right(user: User) => repositoryService.createFromGitHub(user).flatMap {
-                    case Right(user: User) => Future(Created(Json.toJson(user)))
+                    case Right(user: User) => Future(Redirect(routes.GitHubController.read(user.login)))
                     case Left(error: APIError) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
                 }
             case Left(error: APIError) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))

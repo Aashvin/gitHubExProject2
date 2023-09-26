@@ -6,7 +6,7 @@ import play.api.http.Status
 import play.api.libs.json.{JsValue, Json}
 import play.api.test.FakeRequest
 import play.api.mvc.{AnyContent, Result}
-import play.api.test.Helpers.{contentAsJson, defaultAwaitTimeout, status}
+import play.api.test.Helpers.{contentAsJson, contentType, defaultAwaitTimeout, flash, header, headers, redirectLocation, route, status}
 
 import scala.concurrent.Future
 
@@ -35,6 +35,14 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         Some("updatedTestLocation"),
         200,
         5
+    )
+
+    private val myUser: User = User(
+        "Aashvin",
+        "2019-09-25T12:57:18Z",
+        None,
+        2,
+        2
     )
 
     "GitHubController .index()" should {
@@ -107,7 +115,6 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
             val readResult: Future[Result] = TestGitHubController.read(testUser.login)(readRequest)
 
             status(readResult) shouldBe Status.OK
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
 
             afterEach()
         }
@@ -227,6 +234,77 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
 
             status(deleteResult) shouldBe Status.INTERNAL_SERVER_ERROR
             contentAsJson(deleteResult) shouldBe Json.toJson("Bad response from upstream; got status: 404, and got reason User not found.")
+
+            afterEach()
+        }
+    }
+
+    "GitHubController .getGitHubUser()" should {
+
+        "return Ok" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin")
+            val readResult: Future[Result] = TestGitHubController.getGitHubUser("Aashvin")(readRequest)
+
+            status(readResult) shouldBe Status.OK
+
+            afterEach()
+        }
+
+        "give a user not found error" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins")
+            val readResult: Future[Result] = TestGitHubController.getGitHubUser("Aashvins")(readRequest)
+
+            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
+
+            afterEach()
+        }
+    }
+
+    "GitHubController .createFromGitHub()" should {
+
+        "create a new user from GitHub in the database" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet("/addgithubuser/Aashvin")
+            val readResult: Future[Result] = TestGitHubController.createFromGitHub("Aashvin")(readRequest)
+
+            status(readResult) shouldBe Status.SEE_OTHER
+            redirectLocation(readResult) shouldBe Some(s"/read/Aashvin")
+
+            afterEach()
+        }
+
+        "give a user already exists error" in {
+            beforeEach()
+
+            val request: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(myUser))
+            val createResult: Future[Result] = TestGitHubController.create()(request)
+
+            status(createResult) shouldBe Status.CREATED
+            contentAsJson(createResult) shouldBe Json.toJson(myUser)
+
+            val readRequest: FakeRequest[AnyContent] = buildGet("/addgithubuser/Aashvin")
+            val readResult: Future[Result] = TestGitHubController.createFromGitHub("Aashvin")(readRequest)
+
+            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason A user with this login already exists.")
+
+            afterEach()
+        }
+
+        "give a user not found error" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/addgithubuser/Aashvins")
+            val readResult: Future[Result] = TestGitHubController.createFromGitHub("Aashvins")(readRequest)
+
+            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
 
             afterEach()
         }
