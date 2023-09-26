@@ -1,6 +1,6 @@
 package controllers
 
-import models.{APIError, User}
+import models.{APIError, Repo, User}
 
 import javax.inject._
 import play.api.libs.json.{JsValue, Json}
@@ -61,6 +61,13 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
                     case Left(error: APIError) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
                 }
             case Left(error: APIError) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
+        }
+    }
+
+    def getGitHubUserRepos(login: String): Action[AnyContent] = Action.async { implicit request =>
+        gitHubService.getUserRepos(login = login).value.map {
+            case Right(repos: Seq[Repo]) => Ok(Json.toJson(repos))
+            case Left(error: APIError) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
         }
     }
 }

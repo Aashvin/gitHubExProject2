@@ -19,3 +19,4 @@ DELETE  /delete/:login              controllers.GitHubController.delete(login: S
 GET     /addgithubuser/:login       controllers.GitHubController.createFromGitHub(login: String)
 
 GET     /github/users/:login        controllers.GitHubController.getGitHubUser(login: String)
+GET     /github/users/:login/repos  controllers.GitHubController.getGitHubUserRepos(login: String)
