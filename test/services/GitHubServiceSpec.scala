@@ -33,7 +33,7 @@ class GitHubServiceSpec extends BaseSpec with MockFactory with ScalaFutures with
                 .returning(EitherT.rightT[Future, APIError](someUser.as[User]))
                 .once()
 
-            ScalaFutures.whenReady(testService.getUser(urlOverride = Some(url), login = "someLogin").value) { result =>
+            whenReady(testService.getUser(urlOverride = Some(url), login = "someLogin").value) { result =>
                 result shouldBe Right(User("someLogin", "someDate", Some("someLocation"), 3, 100))
             }
         }

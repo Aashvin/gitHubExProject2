@@ -3,12 +3,12 @@ package services
 import models.{APIError, User}
 import play.api.libs.json.{JsError, JsSuccess, JsValue}
 import play.api.mvc.Request
-import repositories.GitHubRepository
+import repositories.{GitHubRepository, RepositoryTrait}
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
 
-class RepositoryService @Inject()(gitHubRepository: GitHubRepository)(implicit ec: ExecutionContext) {
+class RepositoryService @Inject()(gitHubRepository: RepositoryTrait)(implicit ec: ExecutionContext) {
     def index(): Future[Either[APIError, Seq[User]]] = {
         gitHubRepository.index()
     }

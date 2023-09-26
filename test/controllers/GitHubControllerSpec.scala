@@ -181,7 +181,7 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
             afterEach()
         }
 
-        "give an updated login error" in {
+        "give an attempt to update login error" in {
             beforeEach()
 
             val createRequest: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))

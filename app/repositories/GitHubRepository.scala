@@ -1,22 +1,34 @@
 package repositories
 
+import com.google.inject.ImplementedBy
 import models.{APIError, User}
 import org.mongodb.scala.model._
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
 
-import javax.inject.Inject
+import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
+@ImplementedBy(classOf[GitHubRepository])
+trait RepositoryTrait {
+    def index(): Future[Either[APIError, Seq[User]]]
+    def create(user: User): Future[Either[APIError, User]]
+    def read(login: String): Future[Either[APIError, User]]
+    def update(login: String, user: User): Future[Either[APIError, User]]
+    def delete(login: String): Future[Either[APIError, Boolean]]
+    def deleteAll(): Future[Unit]
+}
+
+@Singleton
 class GitHubRepository @Inject()(mongoComponent: MongoComponent)(implicit ec: ExecutionContext) extends PlayMongoRepository[User] (
-    collectionName = "dataModels",
+    collectionName = "users",
     mongoComponent = mongoComponent,
     domainFormat = User.formats,
     indexes = Seq(IndexModel(
-        Indexes.ascending("_id")
+        Indexes.ascending("login"), IndexOptions().unique(true)
     )),
     replaceIndexes = false
-) {
+) with RepositoryTrait {
     def index(): Future[Either[APIError, Seq[User]]] = {
         collection.find().toFuture().map {
             case users: Seq[User] => Right(users)
