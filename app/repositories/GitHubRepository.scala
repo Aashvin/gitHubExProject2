@@ -20,7 +20,7 @@ class GitHubRepository @Inject()(mongoComponent: MongoComponent)(implicit ec: Ex
     def index(): Future[Either[APIError, Seq[User]]] = {
         collection.find().toFuture().map {
             case users: Seq[User] => Right(users)
-            case _ => Left(APIError.BadAPIResponse(404, "No users found."))
+            case _ => Left(APIError.BadAPIResponse(400, "Could not retrieve users."))
         }
     }
 
@@ -56,7 +56,7 @@ class GitHubRepository @Inject()(mongoComponent: MongoComponent)(implicit ec: Ex
                         options = new ReplaceOptions().upsert(true)
                     ).toFutureOption().flatMap {
                         case Some(result) if result.getMatchedCount == 1 && result.getModifiedCount == 1 => read(login)
-                        case _ => Future(Left(APIError.BadAPIResponse(400, "No user fields were updated.")))
+                        case _ => Future(Left(APIError.BadAPIResponse(400, "Could not update user.")))
                     }
                 }
             case None => Future(Left(APIError.BadAPIResponse(404, "User not found.")))
