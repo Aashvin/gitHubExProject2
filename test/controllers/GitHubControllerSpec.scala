@@ -1,7 +1,7 @@
 package controllers
 
 import baseSpec.BaseSpecWithApplication
-import models.User
+import models.{Owner, Repo, User}
 import play.api.http.Status
 import play.api.libs.json.{JsValue, Json}
 import play.api.test.FakeRequest
@@ -302,6 +302,35 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
 
             val readRequest: FakeRequest[AnyContent] = buildGet(s"/addgithubuser/Aashvins")
             val readResult: Future[Result] = TestGitHubController.createFromGitHub("Aashvins")(readRequest)
+
+            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
+
+            afterEach()
+        }
+    }
+
+    "GitHubController .getGitHubUserRepos()" should {
+        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
+        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
+        val someRepos: Seq[Repo] = Seq(repo1, repo2)
+
+        "return Ok" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos")
+            val readResult: Future[Result] = TestGitHubController.getGitHubUserRepos("Aashvin")(readRequest)
+
+            status(readResult) shouldBe Status.OK
+
+            afterEach()
+        }
+
+        "give a user not found error" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos")
+            val readResult: Future[Result] = TestGitHubController.getGitHubUserRepos("Aashvins")(readRequest)
 
             status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
             contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
