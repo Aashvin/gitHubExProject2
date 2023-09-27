@@ -1,0 +1,25 @@
+@import models.RepoContents
+@(login: String, repoName: String, repoContents: Seq[RepoContents])
+
+@main("View GitHub Repo Contents"){
+    <h1>View GitHub Repo Contents</h1>
+}
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Title</title>
+    </head>
+    <body>
+        @repoContents.map{ repoContent =>
+            <p>
+                <a href="/github/users/@login/repos/@repoName/@repoContent.path"><b>@repoContent.name</b></a> <br>
+                Type: @{repoContent.`type`} <br>
+                Path: @repoContent.path <br>
+                URL: @repoContent.url <br>
+                HTML URL: @repoContent.html_url <br>
+            </p>
+        }
+    </body>
+</html>

@@ -12,11 +12,13 @@ GET     /assets/*file               controllers.Assets.versioned(path="/public",
 
 GET     /                     controllers.GitHubController.index()
 
-POST    /create              controllers.GitHubController.create()
-GET     /read/:login              controllers.GitHubController.read(login: String)
+POST    /create                     controllers.GitHubController.create()
+GET     /read/:login                controllers.GitHubController.read(login: String)
 PUT     /update/:login              controllers.GitHubController.update(login: String)
 DELETE  /delete/:login              controllers.GitHubController.delete(login: String)
 GET     /addgithubuser/:login       controllers.GitHubController.createFromGitHub(login: String)
 
-GET     /github/users/:login        controllers.GitHubController.getGitHubUser(login: String)
-GET     /github/users/:login/repos  controllers.GitHubController.getGitHubUserRepos(login: String)
+GET     /github/users/:login                            controllers.GitHubController.getGitHubUser(login: String)
+GET     /github/users/:login/repos                      controllers.GitHubController.getGitHubUserRepos(login: String)
+GET     /github/users/:login/repos/:repoName            controllers.GitHubController.getGitHubRepo(login: String, repoName: String)
+GET     /github/users/:login/repos/:repoName/*path      controllers.GitHubController.getGitHubRepoContents(login: String, repoName: String, path: String)

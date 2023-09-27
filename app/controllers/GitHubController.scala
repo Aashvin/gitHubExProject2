@@ -1,12 +1,13 @@
 package controllers
 
-import models.{APIError, Repo, User}
+import models.{APIError, Repo, RepoContents, RepoFile, User}
 
 import javax.inject._
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc._
 import services.{GitHubService, RepositoryService}
 
+import java.util.Base64
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
@@ -68,6 +69,28 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
         gitHubService.getUserRepos(login = login).value.map {
             case Right(repos: Seq[Repo]) => Ok(Json.toJson(repos))
             case Left(error: APIError) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
+        }
+    }
+
+    def getGitHubRepo(login: String, repoName: String, path: Option[String] = None): Action[AnyContent] = Action.async { implicit request =>
+        gitHubService.getRepoContents(login = login, repoName = repoName, path = path).value.map {
+            case Right(repoContents: Seq[RepoContents]) => Ok(views.html.viewRepoContents(login, repoName, repoContents))
+            case Left(error: APIError) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
+        }
+    }
+
+    def getGitHubRepoContents(login: String, repoName: String, path: String): Action[AnyContent] = Action.async { implicit request =>
+        gitHubService.getRepoFile(login = login, repoName = repoName, path = path).value.flatMap {
+            case Right(repoFile: RepoFile) => Future(Ok(views.html.viewRepoFile(repoFile)))
+            case Left(error: APIError.BadAPIResponse) =>
+                if (error.upstreamStatus == 500) {
+                    Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
+                } else {
+                    gitHubService.getRepoContents(login = login, repoName = repoName, path = Some(path)).value.map {
+                        case Right(repoContents: Seq[RepoContents]) => Ok(views.html.viewRepoContents(login, repoName, repoContents))
+                        case Left(error2: APIError) => Status(error2.httpResponseStatus)(Json.toJson(error2.reason))
+                    }
+                }
         }
     }
 }
