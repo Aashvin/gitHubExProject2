@@ -311,9 +311,9 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
     }
 
     "GitHubController .getGitHubUserRepos()" should {
-        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
-        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
-        val someRepos: Seq[Repo] = Seq(repo1, repo2)
+//        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
+//        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
+//        val someRepos: Seq[Repo] = Seq(repo1, repo2)
 
         "return Ok" in {
             beforeEach()
@@ -334,6 +334,75 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
 
             status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
             contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
+
+            afterEach()
+        }
+    }
+
+    "GitHubController .getGitHubRepo()" should {
+        //        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
+        //        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
+        //        val someRepos: Seq[Repo] = Seq(repo1, repo2)
+
+        "return Ok" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos/COMP0031-PlantBot")
+            val readResult: Future[Result] = TestGitHubController.getGitHubRepo("Aashvin", "COMP0031-PlantBot", None)(readRequest)
+
+            status(readResult) shouldBe Status.OK
+
+            afterEach()
+        }
+
+        "give a repo contents path does not exist error" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos/COMP0031-PlantBot")
+            val readResult: Future[Result] = TestGitHubController.getGitHubRepo("Aashvins", "COMP0031-PlantBot", None)(readRequest)
+
+            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
+
+            afterEach()
+        }
+    }
+
+    "GitHubController .getGitHubRepoContents()" should {
+        //        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
+        //        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
+        //        val someRepos: Seq[Repo] = Seq(repo1, repo2)
+
+        "return Ok when retrieving a file" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos/COMP0031-PlantBot/README.md")
+            val readResult: Future[Result] = TestGitHubController.getGitHubRepoContents("Aashvin", "COMP0031-PlantBot", "README.md")(readRequest)
+
+            status(readResult) shouldBe Status.OK
+
+            afterEach()
+        }
+
+        "return Ok when retrieving a directory" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos/COMP0031-PlantBot/README.md")
+            val readResult: Future[Result] = TestGitHubController.getGitHubRepoContents("Aashvin", "COMP0031-PlantBot", "plantbot")(readRequest)
+
+            status(readResult) shouldBe Status.OK
+
+            afterEach()
+        }
+
+        "give a repo contents path does not exist error" in {
+            beforeEach()
+
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos/COMP0031-PlantBot/README.md")
+            val readResult: Future[Result] = TestGitHubController.getGitHubRepoContents("Aashvins", "COMP0031-PlantBot", "README.md")(readRequest)
+
+            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
 
             afterEach()
         }
