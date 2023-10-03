@@ -3,7 +3,7 @@ body {
     font-family: Arial, sans-serif;
 }
 
-.user-name-title {
+.repo-title {
     color: white;
     font-size: 24pt;
 }
@@ -11,6 +11,7 @@ body {
 .div1 {
     color: #b4babf;
     font-size: 20pt;
+    width: fit-content;
 }
 
 .p1 {
@@ -21,13 +22,21 @@ body {
     color: #b4babf;
     font-size: 16pt;
     border: solid black;
-    width: fit-content;
 }
 
-.link-paragraph, .link-paragraph:hover, .link-paragraph:visited, .link-paragraph:active {
-    font-size: 16pt;
-    color: white;
-    text-decoration: none;
+.path-paragraph {
+    font-size: 20pt;
+    color: #b4babf;
+}
+
+.code-block {
+    padding: 20px;
+    border-radius: 25px;
+    box-sizing: border-box;
+    background-color: #525354;
+    color: #b4babf;
+    border: solid black;
+    font-size: 14pt;
 }
 
 a, a:hover, a:visited, a:active {

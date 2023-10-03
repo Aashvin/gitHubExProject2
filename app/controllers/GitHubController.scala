@@ -81,7 +81,7 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
 
     def getGitHubRepoContents(login: String, repoName: String, path: String): Action[AnyContent] = Action.async { implicit request =>
         gitHubService.getRepoFile(login = login, repoName = repoName, path = path).value.flatMap {
-            case Right(repoFile: RepoFile) => Future(Ok(views.html.viewRepoFile(repoFile)))
+            case Right(repoFile: RepoFile) => Future(Ok(views.html.viewRepoFile(login, repoName, repoFile)))
             case Left(error: APIError.BadAPIResponse) =>
                 if (error.upstreamStatus == 500) {
                     Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))

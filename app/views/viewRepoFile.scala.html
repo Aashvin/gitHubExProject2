@@ -1,28 +1,43 @@
 @import models.RepoFile
 @import play.twirl.api.HtmlFormat
 @import java.util.Base64
-@(repoFile: RepoFile)
+@(login: String, repoName: String, repoFile: RepoFile)
 
 @main("View GitHub Repo File"){
-    <h1>View GitHub Repo File</h1>
+    <h1 class="repo-title">@login/@repoName</h1>
 }
 
 <!DOCTYPE html>
 <html lang="en">
+    <link rel="stylesheet" type="text/css" media="screen" href="@routes.Assets.versioned("/stylesheets/viewRepoFile.css")">
     <head>
         <meta charset="UTF-8">
         <title>Title</title>
     </head>
     <body>
-        <p>
-            Name: @repoFile.name <br>
-            Type: @{repoFile.`type`} <br>
-            Path: @repoFile.path <br>
-            URL: @repoFile.url <br>
-            HTML URL: @repoFile.html_url <br>
-            Encoding: @repoFile.encoding <br>
-            Content: <br><br>
-            @Html(HtmlFormat.escape(Base64.getMimeDecoder.decode(repoFile.content).map(_.toChar).mkString).toString.replaceAll("\n", "<br>"))
+        <p class="path-paragraph">
+            @repoFile.path
+            <br><br>
+            @if(repoFile.path.count(_ == '/') == 0) {
+                <a href="/github/users/@login/repos/@repoName">Back &#128281;</a>
+            } else {
+                <a href="/github/users/@login/repos/@repoName/@repoFile.path.slice(0, repoFile.path.lastIndexOf("/"))">Back &#128281;</a>
+            }
         </p>
+        <div class="div1">
+            <p class="p1">
+                Name: @repoFile.name <br>
+                Type: @{repoFile.`type`} <br>
+                Path: @repoFile.path <br>
+                URL: @repoFile.url <br>
+                HTML URL: @repoFile.html_url <br>
+                Encoding: @repoFile.encoding <br>
+            </p>
+            <p class="code-block">
+                <code>
+                    @Html(HtmlFormat.escape(Base64.getMimeDecoder.decode(repoFile.content).map(_.toChar).mkString).toString.replaceAll("\n", "<br>"))
+                </code>
+            </p>
+        </div>
     </body>
 </html>

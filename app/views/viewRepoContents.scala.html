@@ -19,9 +19,9 @@
             } else {
                 @repoName/@path
             }
-            <br>
+            <br><br>
             @if(path.lastIndexOf("/") != -1) {
-                <a href="/github/users/@login/repos/@repoName/@path.slice(0, path.lastIndexOf("/"))">Back</a>
+                <a href="/github/users/@login/repos/@repoName/@path.slice(0, path.lastIndexOf("/"))">Back &#128281;</a>
             } else {
                 @if(path != "") {
                     <a href="/github/users/@login/repos/@repoName">Back &#128281;</a>
