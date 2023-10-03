@@ -67,7 +67,7 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
 
     def getGitHubUserRepos(login: String): Action[AnyContent] = Action.async { implicit request =>
         gitHubService.getUserRepos(login = login).value.map {
-            case Right(repos: Seq[Repo]) => Ok(Json.toJson(repos))
+            case Right(repos: Seq[Repo]) => Ok(views.html.viewRepos(login, repos))
             case Left(error: APIError) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
         }
     }

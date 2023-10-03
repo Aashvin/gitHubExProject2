@@ -1,0 +1,38 @@
+@import models.Repo
+@(login: String, repos: Seq[Repo])
+
+@main("View User Repos"){
+    <h1 class="repo-title">@login's repos</h1>
+}
+
+<!DOCTYPE html>
+<html lang="en">
+    <link rel="stylesheet" type="text/css" media="screen" href="@routes.Assets.versioned("/stylesheets/viewRepos.css")">
+    <head>
+        <meta charset="UTF-8">
+        <title>Title</title>
+    </head>
+    <body>
+        <p class="path-paragraph">
+            <a href="/github/users/@login">Back to user &#128281;</a>
+        </p>
+        <div class="div1">
+        @repos.map{ repo =>
+            <p class="p1">
+                <a href="/github/users/@login/repos/@repo.name"><b>@repo.name</b></a> <br><br>
+                Private: @{repo.`private`} <br>
+                Owner: @repo.owner.login <br>
+                Description: @repo.description <br>
+                URL: @repo.url <br>
+                Date created: @repo.created_at <br>
+                Date updated: @repo.updated_at <br>
+                Visibility: @repo.visibility <br>
+                Number of forks: @repo.forks <br>
+                Number of open issues: @repo.open_issues <br>
+                Number of watchers: @repo.watchers <br>
+                Default branch: @repo.default_branch <br>
+            </p>
+        }
+        </div>
+    </body>
+</html>
