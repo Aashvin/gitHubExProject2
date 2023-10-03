@@ -1,25 +1,43 @@
 @import models.RepoContents
-@(login: String, repoName: String, repoContents: Seq[RepoContents])
+@(login: String, repoName: String, repoContents: Seq[RepoContents], path: String)
 
 @main("View GitHub Repo Contents"){
-    <h1>View GitHub Repo Contents</h1>
+    <h1 class="repo-title">@login/@repoName</h1>
 }
 
 <!DOCTYPE html>
 <html lang="en">
+    <link rel="stylesheet" type="text/css" media="screen" href="@routes.Assets.versioned("/stylesheets/viewRepoContents.css")">
     <head>
         <meta charset="UTF-8">
         <title>Title</title>
     </head>
     <body>
-        @repoContents.map{ repoContent =>
-            <p>
-                <a href="/github/users/@login/repos/@repoName/@repoContent.path"><b>@repoContent.name</b></a> <br>
-                Type: @{repoContent.`type`} <br>
-                Path: @repoContent.path <br>
-                URL: @repoContent.url <br>
-                HTML URL: @repoContent.html_url <br>
-            </p>
-        }
+        <p class="path-paragraph">
+            @if(path == ""){
+                @repoName
+            } else {
+                @repoName/@path
+            }
+            <br>
+            @if(path.lastIndexOf("/") != -1) {
+                <a href="/github/users/@login/repos/@repoName/@path.slice(0, path.lastIndexOf("/"))">Back</a>
+            } else {
+                @if(path != "") {
+                    <a href="/github/users/@login/repos/@repoName">Back &#128281;</a>
+                }
+            }
+        </p>
+        <div class="div1">
+            @repoContents.map{ repoContent =>
+                <p class="p1">
+                    <a href="/github/users/@login/repos/@repoName/@repoContent.path"><b>@repoContent.name</b></a> <br><br>
+                    Type: @{repoContent.`type`} <br>
+                    Path: @repoContent.path <br>
+                    URL: @repoContent.url <br>
+                    HTML URL: @repoContent.html_url <br>
+                </p>
+            }
+        </div>
     </body>
 </html>
