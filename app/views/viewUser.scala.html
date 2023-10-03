@@ -2,25 +2,28 @@
 @(user: User)
 
 @main("View GitHub User"){
-    <h1>View GitHub User</h1>
+    <h1 class="user-name-title">@user.login</h1>
 }
 
 <!DOCTYPE html>
 <html lang="en">
+    <link rel="stylesheet" type="text/css" media="screen" href="@routes.Assets.versioned("/stylesheets/viewUser.css")">
     <head>
         <meta charset="UTF-8">
         <title>Title</title>
     </head>
     <body>
-        <p>
-            Username/Login: @user.login <br>
-            Date Created: @user.created_at <br>
-            Location: @user.location <br>
-            Number of Followers: @user.followers <br>
-            Number Following: @user.following <br>
-        </p>
-        <p>
-            <a href="/github/users/@user.login/repos">Repositories</a>
+        <div class="div1">
+            Details
+            <p class="p1">
+                Date Created: @user.created_at <br>
+                Location: @user.location <br>
+                Number of Followers: @user.followers <br>
+                Number Following: @user.following <br>
+            </p>
+        </div>
+        <p class="link-paragraph">
+            <a href="/github/users/@user.login/repos">View @user.login's Repositories</a>
         </p>
     </body>
 </html>
