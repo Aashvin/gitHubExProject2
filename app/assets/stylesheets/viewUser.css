@@ -24,12 +24,6 @@ body {
     width: fit-content;
 }
 
-.link-paragraph, .link-paragraph:hover, .link-paragraph:visited, .link-paragraph:active {
-    font-size: 16pt;
-    color: white;
-    text-decoration: none;
-}
-
 a, a:hover, a:visited, a:active {
     color: inherit;
 }
