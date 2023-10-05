@@ -16,7 +16,7 @@
     </head>
     <body>
         <p class="path-paragraph">
-            @repoFile.path
+            @repoName/@repoFile.path
             <br><br>
             @if(repoFile.path.count(_ == '/') == 0) {
                 <a href="/github/users/@login/repos/@repoName">Back &#128281;</a>
