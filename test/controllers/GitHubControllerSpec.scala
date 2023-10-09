@@ -1,17 +1,23 @@
 package controllers
 
 import baseSpec.BaseSpecWithApplication
-import models.{Owner, Repo, User}
+import cats.data.EitherT
+import models.{APIError, Owner, Repo, RepoContents, RepoFile, User}
 import play.api.http.Status
 import play.api.libs.json.{JsValue, Json}
 import play.api.test.FakeRequest
-import play.api.mvc.{AnyContent, Result}
-import play.api.test.Helpers.{contentAsJson, contentType, defaultAwaitTimeout, flash, header, headers, redirectLocation, route, status}
+import play.api.mvc.{AnyContent, Request, Result}
+import play.api.test.Helpers.{contentAsJson, contentAsString, defaultAwaitTimeout, redirectLocation, status}
+import services.{GitHubService, RepositoryService}
+import org.scalamock.scalatest.MockFactory
+import org.scalatest.concurrent.ScalaFutures
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
-class GitHubControllerSpec extends BaseSpecWithApplication {
-    val TestGitHubController: GitHubController = new GitHubController(component, repoService, service)
+class GitHubControllerSpec extends BaseSpecWithApplication with MockFactory with ScalaFutures {
+    val mockRepoService: RepositoryService = mock[RepositoryService]
+    val mockGitHubService: GitHubService = mock[GitHubService]
+    val TestGitHubController: GitHubController = new GitHubController(component, mockRepoService, mockGitHubService)
 
     private val testUser: User = User(
         "testLogin",
@@ -37,20 +43,32 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         5
     )
 
-    private val myUser: User = User(
-        "Aashvin",
-        "2019-09-25T12:57:18Z",
-        None,
-        2,
-        2
-    )
+    val repo1: Repo = Repo(name = "name1", `private` = false, owner = Owner("owner1"), description = Some("description1"), url = "url1", created_at = "01/01/2001", updated_at = "02/02/2002", visibility = "public", forks = 0, open_issues = 0, watchers = 0, default_branch = "main")
+    val repo2: Repo = Repo(name = "name2", `private` = false, owner = Owner("owner2"), description = Some("description2"), url = "url2", created_at = "03/03/2003", updated_at = "04/04/2004", visibility = "public", forks = 2, open_issues = 3, watchers = 10, default_branch = "main")
+    val sequenceOfRepos: Seq[Repo] = Seq(repo1, repo2)
+
+    val repoContents1: RepoContents = RepoContents(name = "name1", path = "path1", url = "url1", html_url = "html_url1", `type` = "file")
+    val repoContents2: RepoContents = RepoContents(name = "name2", path = "path2", url = "url2", html_url = "html_url2", `type` = "dir")
+    val sequenceOfRepoContents: Seq[RepoContents] = Seq(repoContents1, repoContents2)
+
+    val testRepoFile: RepoFile = RepoFile("name1", "path1", "url1", "html_url1", "file", "content1", "base64")
 
     "GitHubController .index()" should {
 
         "return Ok" in {
-            val result = TestGitHubController.index()(FakeRequest())
+            val request: FakeRequest[AnyContent] = FakeRequest()
+
+            val sequenceOfUsers = Seq(testUser, updatedTestUser, differentLoginTestUser)
+
+            (mockRepoService.index _)
+                .expects
+                .returning(Future(Right(sequenceOfUsers)))
+                .once()
+
+            val result = TestGitHubController.index()(request)
+
             status(result) shouldBe Status.OK
-            contentAsJson(result) shouldBe Json.toJson(Seq[User]())
+            contentAsJson(result) shouldBe Json.toJson(sequenceOfUsers)
         }
     }
 
@@ -60,6 +78,12 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
             beforeEach()
 
             val request: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
+
+            (mockRepoService.create(_: Request[JsValue]))
+                .expects(request)
+                .returning(Future(Right(testUser)))
+                .once()
+
             val createResult: Future[Result] = TestGitHubController.create()(request)
 
             status(createResult) shouldBe Status.CREATED
@@ -72,6 +96,12 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
             beforeEach()
 
             val request: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.obj())
+
+            (mockRepoService.create(_: Request[JsValue]))
+                .expects(request)
+                .returning(Future(Left(APIError.BadAPIResponse(400, "Input can't be parsed as a User."))))
+                .once()
+
             val createResult: Future[Result] = TestGitHubController.create()(request)
 
             status(createResult) shouldBe Status.INTERNAL_SERVER_ERROR
@@ -84,20 +114,19 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
             beforeEach()
 
             val request: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
+
+            (mockRepoService.create(_: Request[JsValue]))
+                .expects(request)
+                .returning(Future(Left(APIError.BadAPIResponse(400, "A user with this login already exists."))))
+                .once()
+
             val createResult: Future[Result] = TestGitHubController.create()(request)
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
-
-            val request2: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
-            val createResult2: Future[Result] = TestGitHubController.create()(request2)
-
-            status(createResult2) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(createResult2) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason A user with this login already exists.")
+            status(createResult) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(createResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason A user with this login already exists.")
 
             afterEach()
         }
-
     }
 
     "GitHubController .read()" should {
@@ -105,14 +134,14 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "find a user by login in the database" in {
             beforeEach()
 
-            val createRequest: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
-            val createResult: Future[Result] = TestGitHubController.create()(createRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/read/${testUser.login}")
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
+            (mockRepoService.read(_: String))
+                .expects(testUser.login)
+                .returning(Future(Right(testUser)))
+                .once()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/read/${testUser.login}")
-            val readResult: Future[Result] = TestGitHubController.read(testUser.login)(readRequest)
+            val readResult: Future[Result] = TestGitHubController.read(testUser.login)(request)
 
             status(readResult) shouldBe Status.OK
 
@@ -122,8 +151,14 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a user not found error" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/read/${testUser.login}")
-            val readResult: Future[Result] = TestGitHubController.read(testUser.login)(readRequest)
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/read/userDoesNotExist")
+
+            (mockRepoService.read(_: String))
+                .expects("userDoesNotExist")
+                .returning(Future(Left(APIError.BadAPIResponse(404, "User not found."))))
+                .once()
+
+            val readResult: Future[Result] = TestGitHubController.read("userDoesNotExist")(readRequest)
 
             status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
             contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 404, and got reason User not found.")
@@ -137,17 +172,17 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "update a user in the database" in {
             beforeEach()
 
-            val createRequest: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
-            val createResult: Future[Result] = TestGitHubController.create()(createRequest)
+            val request: FakeRequest[JsValue] = buildPut(s"/update/${testUser.login}").withBody[JsValue](Json.toJson(updatedTestUser))
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
+            (mockRepoService.update(_: Request[JsValue], _: String))
+                .expects(request, testUser.login)
+                .returning(Future(Right(updatedTestUser)))
+                .once()
 
-            val updateRequest: FakeRequest[JsValue] = buildPut(s"/update/${testUser.login}").withBody[JsValue](Json.toJson(updatedTestUser))
-            val updateResult: Future[Result] = TestGitHubController.update(testUser.login)(updateRequest)
+            val result: Future[Result] = TestGitHubController.update(testUser.login)(request)
 
-            status(updateResult) shouldBe Status.ACCEPTED
-            contentAsJson(updateResult) shouldBe Json.toJson(updatedTestUser)
+            status(result) shouldBe Status.ACCEPTED
+            contentAsJson(result) shouldBe Json.toJson(updatedTestUser)
 
             afterEach()
         }
@@ -155,17 +190,17 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a bad input error" in {
             beforeEach()
 
-            val createRequest: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
-            val createResult: Future[Result] = TestGitHubController.create()(createRequest)
+            val request: FakeRequest[JsValue] = buildPut(s"/update/${testUser.login}").withBody[JsValue](Json.obj())
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
+            (mockRepoService.update(_: Request[JsValue], _: String))
+                .expects(request, testUser.login)
+                .returning(Future(Left(APIError.BadAPIResponse(400, "Input can't be parsed as a User."))))
+                .once()
 
-            val updateRequest: FakeRequest[JsValue] = buildPut(s"/update/${testUser.login}").withBody[JsValue](Json.obj())
-            val updateResult: Future[Result] = TestGitHubController.update(testUser.login)(updateRequest)
+            val result: Future[Result] = TestGitHubController.update(testUser.login)(request)
 
-            status(updateResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(updateResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason Input can't be parsed as a User.")
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason Input can't be parsed as a User.")
 
             afterEach()
         }
@@ -173,17 +208,17 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a user not found error" in {
             beforeEach()
 
-            val createRequest: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
-            val createResult: Future[Result] = TestGitHubController.create()(createRequest)
+            val request: FakeRequest[JsValue] = buildPut(s"/update/userDoesNotExist").withBody[JsValue](Json.toJson(updatedTestUser))
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
+            (mockRepoService.update(_: Request[JsValue], _: String))
+                .expects(request, "userDoesNotExist")
+                .returning(Future(Left(APIError.BadAPIResponse(404, "User not found."))))
+                .once()
 
-            val updateRequest: FakeRequest[JsValue] = buildPut(s"/update/doesNotExist").withBody[JsValue](Json.toJson(updatedTestUser))
-            val updateResult: Future[Result] = TestGitHubController.update("doesNotExist")(updateRequest)
+            val result: Future[Result] = TestGitHubController.update("userDoesNotExist")(request)
 
-            status(updateResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(updateResult) shouldBe Json.toJson("Bad response from upstream; got status: 404, and got reason User not found.")
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 404, and got reason User not found.")
 
             afterEach()
         }
@@ -191,17 +226,17 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give an attempt to update login error" in {
             beforeEach()
 
-            val createRequest: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
-            val createResult: Future[Result] = TestGitHubController.create()(createRequest)
+            val request: FakeRequest[JsValue] = buildPut(s"/update/${testUser.login}").withBody[JsValue](Json.toJson(differentLoginTestUser))
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
+            (mockRepoService.update(_: Request[JsValue], _: String))
+                .expects(request, testUser.login)
+                .returning(Future(Left(APIError.BadAPIResponse(400, "The updated login needs to be the same as the current login."))))
+                .once()
 
-            val updateRequest: FakeRequest[JsValue] = buildPut(s"/update/${testUser.login}").withBody[JsValue](Json.toJson(differentLoginTestUser))
-            val updateResult: Future[Result] = TestGitHubController.update(testUser.login)(updateRequest)
+            val result: Future[Result] = TestGitHubController.update(testUser.login)(request)
 
-            status(updateResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(updateResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason The updated login needs to be the same as the current login.")
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason The updated login needs to be the same as the current login.")
 
             afterEach()
         }
@@ -212,16 +247,16 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "delete a user from the database" in {
             beforeEach()
 
-            val createRequest: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(testUser))
-            val createResult: Future[Result] = TestGitHubController.create()(createRequest)
+            val request: FakeRequest[AnyContent] = buildDelete(s"/delete/${testUser.login}")
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(testUser)
+            (mockRepoService.delete(_: String))
+                .expects(testUser.login)
+                .returning(Future(Right(true)))
+                .once()
 
-            val deleteRequest: FakeRequest[AnyContent] = buildDelete(s"/delete/${testUser.login}")
-            val deleteResult: Future[Result] = TestGitHubController.delete(testUser.login)(deleteRequest)
+            val result: Future[Result] = TestGitHubController.delete(testUser.login)(request)
 
-            status(deleteResult) shouldBe Status.ACCEPTED
+            status(result) shouldBe Status.ACCEPTED
 
             afterEach()
         }
@@ -229,11 +264,17 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a user not found error" in {
             beforeEach()
 
-            val deleteRequest: FakeRequest[AnyContent] = buildDelete(s"/delete/${testUser.login}")
-            val deleteResult: Future[Result] = TestGitHubController.delete(testUser.login)(deleteRequest)
+            val request: FakeRequest[AnyContent] = buildDelete(s"/delete/userDoesNotExist")
 
-            status(deleteResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(deleteResult) shouldBe Json.toJson("Bad response from upstream; got status: 404, and got reason User not found.")
+            (mockRepoService.delete(_: String))
+                .expects("userDoesNotExist")
+                .returning(Future(Left(APIError.BadAPIResponse(404, "User not found."))))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.delete("userDoesNotExist")(request)
+
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 404, and got reason User not found.")
 
             afterEach()
         }
@@ -244,10 +285,17 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "return Ok" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin")
-            val readResult: Future[Result] = TestGitHubController.getGitHubUser("Aashvin")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/${testUser.login}")
 
-            status(readResult) shouldBe Status.OK
+            (mockGitHubService.getUser(_: Option[String], _: String)(_: ExecutionContext))
+                .expects(None, testUser.login, executionContext)
+                .returning(EitherT.rightT(testUser))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubUser(testUser.login)(request)
+
+            status(result) shouldBe Status.OK
+            contentAsString(result) shouldBe contentAsString(views.html.viewUser(testUser))
 
             afterEach()
         }
@@ -255,11 +303,17 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a user not found error" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins")
-            val readResult: Future[Result] = TestGitHubController.getGitHubUser("Aashvins")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/userDoesNotExist")
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
+            (mockGitHubService.getUser(_: Option[String], _: String)(_: ExecutionContext))
+                .expects(None, "userDoesNotExist", executionContext)
+                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "No user exists with this login.")))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubUser("userDoesNotExist")(request)
+
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
 
             afterEach()
         }
@@ -270,11 +324,22 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "create a new user from GitHub in the database" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet("/addgithubuser/Aashvin")
-            val readResult: Future[Result] = TestGitHubController.createFromGitHub("Aashvin")(readRequest)
+            val readRequest: FakeRequest[AnyContent] = buildGet(s"/addgithubuser/${testUser.login}")
+
+            (mockGitHubService.getUser(_: Option[String], _: String)(_: ExecutionContext))
+                .expects(None, testUser.login, executionContext)
+                .returning(EitherT.rightT(testUser))
+                .once()
+
+            (mockRepoService.createFromGitHub(_: User))
+                .expects(testUser)
+                .returning(Future(Right(testUser)))
+                .once()
+
+            val readResult: Future[Result] = TestGitHubController.createFromGitHub(testUser.login)(readRequest)
 
             status(readResult) shouldBe Status.SEE_OTHER
-            redirectLocation(readResult) shouldBe Some(s"/read/Aashvin")
+            redirectLocation(readResult) shouldBe Some(s"/read/${testUser.login}")
 
             afterEach()
         }
@@ -282,17 +347,22 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a user already exists error" in {
             beforeEach()
 
-            val request: FakeRequest[JsValue] = buildPost("/create").withBody[JsValue](Json.toJson(myUser))
-            val createResult: Future[Result] = TestGitHubController.create()(request)
+            val request: FakeRequest[AnyContent] = buildGet(s"/addgithubuser/${testUser.login}")
 
-            status(createResult) shouldBe Status.CREATED
-            contentAsJson(createResult) shouldBe Json.toJson(myUser)
+            (mockGitHubService.getUser(_: Option[String], _: String)(_: ExecutionContext))
+                .expects(None, testUser.login, executionContext)
+                .returning(EitherT.rightT(testUser))
+                .once()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet("/addgithubuser/Aashvin")
-            val readResult: Future[Result] = TestGitHubController.createFromGitHub("Aashvin")(readRequest)
+            (mockRepoService.createFromGitHub(_: User))
+                .expects(testUser)
+                .returning(Future(Left(APIError.BadAPIResponse(400, "A user with this login already exists."))))
+                .once()
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason A user with this login already exists.")
+            val result: Future[Result] = TestGitHubController.createFromGitHub(testUser.login)(request)
+
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason A user with this login already exists.")
 
             afterEach()
         }
@@ -300,28 +370,38 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a user not found error" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/addgithubuser/Aashvins")
-            val readResult: Future[Result] = TestGitHubController.createFromGitHub("Aashvins")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/addgithubuser/userDoesNotExist")
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
+            (mockGitHubService.getUser(_: Option[String], _: String)(_: ExecutionContext))
+                .expects(None, "userDoesNotExist", executionContext)
+                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "No user exists with this login.")))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.createFromGitHub("userDoesNotExist")(request)
+
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
 
             afterEach()
         }
     }
 
     "GitHubController .getGitHubUserRepos()" should {
-//        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
-//        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
-//        val someRepos: Seq[Repo] = Seq(repo1, repo2)
 
         "return Ok" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos")
-            val readResult: Future[Result] = TestGitHubController.getGitHubUserRepos("Aashvin")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos")
 
-            status(readResult) shouldBe Status.OK
+            (mockGitHubService.getUserRepos(_: Option[String], _: String)(_: ExecutionContext))
+                .expects(None, "testUser", executionContext)
+                .returning(EitherT.rightT(sequenceOfRepos))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubUserRepos("testUser")(request)
+
+            status(result) shouldBe Status.OK
+            contentAsString(result) shouldBe contentAsString(views.html.viewRepos("testUser", sequenceOfRepos))
 
             afterEach()
         }
@@ -329,28 +409,38 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a user not found error" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos")
-            val readResult: Future[Result] = TestGitHubController.getGitHubUserRepos("Aashvins")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/userDoesNotExist/repos")
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
+            (mockGitHubService.getUserRepos(_: Option[String], _: String)(_: ExecutionContext))
+                .expects(None, "userDoesNotExist", executionContext)
+                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "No user exists with this login.")))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubUserRepos("userDoesNotExist")(request)
+
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason No user exists with this login.")
 
             afterEach()
         }
     }
 
     "GitHubController .getGitHubRepo()" should {
-        //        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
-        //        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
-        //        val someRepos: Seq[Repo] = Seq(repo1, repo2)
 
-        "return Ok" in {
+        "return Ok with the content of the root of the repo" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos/COMP0031-PlantBot")
-            val readResult: Future[Result] = TestGitHubController.getGitHubRepo("Aashvin", "COMP0031-PlantBot", None)(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo")
 
-            status(readResult) shouldBe Status.OK
+            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
+                .expects(None, "testUser", "testRepo", None, executionContext)
+                .returning(EitherT.rightT(sequenceOfRepoContents))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubRepo("testUser", "testRepo")(request)
+
+            status(result) shouldBe Status.OK
+            contentAsString(result) shouldBe contentAsString(views.html.viewRepoContents("testUser", "testRepo", sequenceOfRepoContents, ""))
 
             afterEach()
         }
@@ -358,28 +448,38 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a repo contents path does not exist error" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos/COMP0031-PlantBot")
-            val readResult: Future[Result] = TestGitHubController.getGitHubRepo("Aashvins", "COMP0031-PlantBot", None)(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/repoDoesNotExist")
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
+            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
+                .expects(None, "testUser", "repoDoesNotExist", None, executionContext)
+                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo contents path does not exist.")))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubRepo("testUser", "repoDoesNotExist")(request)
+
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
 
             afterEach()
         }
     }
 
     "GitHubController .getGitHubRepoContents()" should {
-        //        val repo1: Repo = Repo("name1", `private` = false, Owner("owner1"), Some("description1"), "url1", "01/01/2001", "02/02/2002", "public", 0, 0, 0, "main")
-        //        val repo2: Repo = Repo("name2", `private` = false, Owner("owner2"), Some("description2"), "url2", "03/03/2003", "04/04/2004", "public", 2, 3, 10, "main")
-        //        val someRepos: Seq[Repo] = Seq(repo1, repo2)
 
         "return Ok when retrieving a file" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos/COMP0031-PlantBot/README.md")
-            val readResult: Future[Result] = TestGitHubController.getGitHubRepoContents("Aashvin", "COMP0031-PlantBot", "README.md")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo/testFile")
 
-            status(readResult) shouldBe Status.OK
+            (mockGitHubService.getRepoFile(_: Option[String], _: String, _: String, _: String)(_: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "testFile", executionContext)
+                .returning(EitherT.rightT(testRepoFile))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubRepoContents("testUser", "testRepo", "testFile")(request)
+
+            status(result) shouldBe Status.OK
+            contentAsString(result) shouldBe contentAsString(views.html.viewRepoFile("testUser", "testRepo", testRepoFile))
 
             afterEach()
         }
@@ -387,10 +487,22 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "return Ok when retrieving a directory" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvin/repos/COMP0031-PlantBot/README.md")
-            val readResult: Future[Result] = TestGitHubController.getGitHubRepoContents("Aashvin", "COMP0031-PlantBot", "plantbot")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo/testDir")
 
-            status(readResult) shouldBe Status.OK
+            (mockGitHubService.getRepoFile(_: Option[String], _: String, _: String, _: String)(_: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "testDir", executionContext)
+                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo file does not exist.")))
+                .once()
+
+            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
+                .expects(None, "testUser", "testRepo", Some("testDir"), executionContext)
+                .returning(EitherT.rightT(sequenceOfRepoContents))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubRepoContents("testUser", "testRepo", "testDir")(request)
+
+            status(result) shouldBe Status.OK
+            contentAsString(result) shouldBe contentAsString(views.html.viewRepoContents("testUser", "testRepo", sequenceOfRepoContents, "testDir"))
 
             afterEach()
         }
@@ -398,11 +510,22 @@ class GitHubControllerSpec extends BaseSpecWithApplication {
         "give a repo contents path does not exist error" in {
             beforeEach()
 
-            val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos/COMP0031-PlantBot/README.md")
-            val readResult: Future[Result] = TestGitHubController.getGitHubRepoContents("Aashvins", "COMP0031-PlantBot", "README.md")(readRequest)
+            val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo/content/does/not/exist")
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
+            (mockGitHubService.getRepoFile(_: Option[String], _: String, _: String, _: String)(_: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "content/does/not/exist", executionContext)
+                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo file does not exist.")))
+                .once()
+
+            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
+                .expects(None, "testUser", "testRepo", Some("content/does/not/exist"), executionContext)
+                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo contents path does not exist.")))
+                .once()
+
+            val result: Future[Result] = TestGitHubController.getGitHubRepoContents("testUser", "testRepo", "content/does/not/exist")(request)
+
+            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
+            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
 
             afterEach()
         }

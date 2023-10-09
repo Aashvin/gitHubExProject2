@@ -72,8 +72,8 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
         }
     }
 
-    def getGitHubRepo(login: String, repoName: String, path: Option[String] = None): Action[AnyContent] = Action.async { implicit request =>
-        gitHubService.getRepoContents(login = login, repoName = repoName, path = path).value.map {
+    def getGitHubRepo(login: String, repoName: String): Action[AnyContent] = Action.async { implicit request =>
+        gitHubService.getRepoContents(login = login, repoName = repoName, path = None).value.map {
             case Right(repoContents: Seq[RepoContents]) => Ok(views.html.viewRepoContents(login, repoName, repoContents, ""))
             case Left(error: APIError) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
         }
