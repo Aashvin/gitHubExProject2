@@ -2,7 +2,9 @@ package services
 
 import cats.data.EitherT
 import connectors.GitHubConnector
-import models.{APIError, Repo, RepoContents, RepoFile, User}
+import models.{APIError, Repo, RepoContent, User}
+import play.api.libs.json.Format.GenericFormat
+import play.api.libs.json.{JsError, JsSuccess, JsValue, OFormat}
 
 import javax.inject._
 import scala.concurrent.{ExecutionContext, Future}
@@ -16,13 +18,17 @@ class GitHubService @Inject()(connector: GitHubConnector) {
     def getUserRepos(urlOverride: Option[String] = None, login: String)(implicit ec: ExecutionContext): EitherT[Future, APIError, Seq[Repo]] =
         connector.getUserRepos[Repo](urlOverride.getOrElse(s"https://api.github.com/users/$login/repos"))
 
-    def getRepoContents(urlOverride: Option[String] = None, login: String, repoName: String, path: Option[String])(implicit ec: ExecutionContext): EitherT[Future, APIError, Seq[RepoContents]] = {
-        path match {
-            case Some(path) => connector.getRepoContents[RepoContents](urlOverride.getOrElse(s"https://api.github.com/repos/$login/$repoName/contents/$path"))
-            case None => connector.getRepoContents[RepoContents](urlOverride.getOrElse(s"https://api.github.com/repos/$login/$repoName/contents"))
+    def getRepoContents[T <: RepoContent](urlOverride: Option[String] = None, login: String, repoName: String, path: String)(implicit rds: OFormat[T], ec: ExecutionContext): Future[Option[Either[APIError, Seq[T]]]] = {
+        connector.getRepoContents(urlOverride.getOrElse(s"https://api.github.com/repos/$login/$repoName/contents/$path")).map {
+            case Right(value: JsValue) =>
+                value.validate[T] match {
+                    case JsSuccess(repoFile, _) => Some(Right(Seq(repoFile)))
+                    case JsError(_) => value.validate[Seq[T]] match {
+                        case JsSuccess(repoContents, _) => Some(Right(repoContents))
+                        case JsError(_) => None
+                    }
+                }
+            case Left(error: APIError) => Some(Left(error))
         }
     }
-
-    def getRepoFile(urlOverride: Option[String] = None, login: String, repoName: String, path: String)(implicit ec: ExecutionContext): EitherT[Future, APIError, RepoFile] =
-        connector.getRepoFile[RepoFile](urlOverride.getOrElse(s"https://api.github.com/repos/$login/$repoName/contents/$path"))
 }

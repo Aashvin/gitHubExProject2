@@ -1,8 +1,8 @@
 package connectors
 
 import cats.data.EitherT
-import models.{APIError, Repo, RepoContents, RepoFile, User}
-import play.api.libs.json.{JsError, JsSuccess, Json, OFormat}
+import models.{APIError, Repo, User}
+import play.api.libs.json._
 import play.api.libs.ws.{WSClient, WSResponse}
 
 import javax.inject.Inject
@@ -43,37 +43,14 @@ class GitHubConnector @Inject()(ws: WSClient) {
         }
     }
 
-    def getRepoContents[Response](url: String)(implicit rds: OFormat[Response], ec: ExecutionContext): EitherT[Future, APIError, Seq[RepoContents]] = {
+    def getRepoContents(url: String)(implicit ec: ExecutionContext): Future[Either[APIError, JsValue]] = {
         val request = ws.url(url)
         val response = request.get()
-        EitherT {
-            response.map {
-                result => {
-                    Json.toJson(result.json).validate[Seq[RepoContents]] match {
-                        case JsSuccess(repoContents, _) => Right(repoContents)
-                        case JsError(_) => Left(APIError.BadAPIResponse(400, "This repo contents path does not exist."))
-                    }
-                }
-            }.recover {
-                case _: WSResponse => Left(APIError.BadAPIResponse(500, "Could not connect."))
-            }
-        }
-    }
 
-    def getRepoFile[Response](url: String)(implicit rds: OFormat[Response], ec: ExecutionContext): EitherT[Future, APIError, RepoFile] = {
-        val request = ws.url(url)
-        val response = request.get()
-        EitherT {
-            response.map {
-                result => {
-                    Json.toJson(result.json).validate[RepoFile] match {
-                        case JsSuccess(repoFile, _) => Right(repoFile)
-                        case JsError(_) => Left(APIError.BadAPIResponse(400, "This repo file does not exist."))
-                    }
-                }
-            }.recover {
-                case _: WSResponse => Left(APIError.BadAPIResponse(500, "Could not connect."))
-            }
+        response.map {
+            result => Right(Json.toJson(result.json))
+        }.recover {
+            case _: WSResponse => Left(APIError.BadAPIResponse(500, "Could not connect."))
         }
     }
 }
