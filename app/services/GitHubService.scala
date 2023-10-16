@@ -1,6 +1,6 @@
 package services
 
-import cats.data.EitherT
+import cats.data.{EitherT, OptionT}
 import connectors.GitHubConnector
 import models.{APIError, Repo, RepoContent, User}
 import play.api.libs.json.Format.GenericFormat
@@ -18,17 +18,19 @@ class GitHubService @Inject()(connector: GitHubConnector) {
     def getUserRepos(urlOverride: Option[String] = None, login: String)(implicit ec: ExecutionContext): EitherT[Future, APIError, Seq[Repo]] =
         connector.getUserRepos[Repo](urlOverride.getOrElse(s"https://api.github.com/users/$login/repos"))
 
-    def getRepoContents[T <: RepoContent](urlOverride: Option[String] = None, login: String, repoName: String, path: String)(implicit rds: OFormat[T], ec: ExecutionContext): Future[Option[Either[APIError, Seq[T]]]] = {
-        connector.getRepoContents(urlOverride.getOrElse(s"https://api.github.com/repos/$login/$repoName/contents/$path")).map {
-            case Right(value: JsValue) =>
-                value.validate[T] match {
-                    case JsSuccess(repoFile, _) => Some(Right(Seq(repoFile)))
-                    case JsError(_) => value.validate[Seq[T]] match {
-                        case JsSuccess(repoContents, _) => Some(Right(repoContents))
-                        case JsError(_) => None
+    def getRepoContents[T <: RepoContent](urlOverride: Option[String] = None, login: String, repoName: String, path: String)(implicit rds: OFormat[T], ec: ExecutionContext): OptionT[Future, Either[APIError, Seq[T]]] = {
+        OptionT {
+            connector.getRepoContents(urlOverride.getOrElse(s"https://api.github.com/repos/$login/$repoName/contents/$path")).value.map {
+                case Right(value: JsValue) =>
+                    value.validate[T] match {
+                        case JsSuccess(repoFile, _) => Some(Right(Seq(repoFile)))
+                        case JsError(_) => value.validate[Seq[T]] match {
+                            case JsSuccess(repoContents, _) => Some(Right(repoContents))
+                            case JsError(_) => None
+                        }
                     }
-                }
-            case Left(error: APIError) => Some(Left(error))
+                case Left(error: APIError) => Some(Left(error))
+            }
         }
     }
 }

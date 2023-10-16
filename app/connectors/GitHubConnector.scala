@@ -43,14 +43,16 @@ class GitHubConnector @Inject()(ws: WSClient) {
         }
     }
 
-    def getRepoContents(url: String)(implicit ec: ExecutionContext): Future[Either[APIError, JsValue]] = {
+    def getRepoContents(url: String)(implicit ec: ExecutionContext): EitherT[Future, APIError, JsValue] = {
         val request = ws.url(url)
         val response = request.get()
 
-        response.map {
-            result => Right(Json.toJson(result.json))
-        }.recover {
-            case _: WSResponse => Left(APIError.BadAPIResponse(500, "Could not connect."))
+        EitherT {
+            response.map {
+                result => Right(Json.toJson(result.json))
+            }.recover {
+                case _: WSResponse => Left(APIError.BadAPIResponse(500, "Could not connect."))
+            }
         }
     }
 }

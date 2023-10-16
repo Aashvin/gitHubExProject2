@@ -1,15 +1,12 @@
 package controllers
 
-import models.{APIError, Repo, RepoContent, RepoContents, RepoFile, User}
-
-import javax.inject._
+import models._
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc._
 import services.{GitHubService, RepositoryService}
 
-import java.util.Base64
+import javax.inject._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.reflect.ClassTag
 
 @Singleton
 class GitHubController @Inject()(val controllerComponents: ControllerComponents, val repositoryService: RepositoryService, val gitHubService: GitHubService)(implicit val ec: ExecutionContext) extends BaseController {
@@ -74,7 +71,7 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
     }
 
     def getGitHubRepo(login: String, repoName: String): Action[AnyContent] = Action.async { implicit request =>
-        gitHubService.getRepoContents[RepoContents](login = login, repoName = repoName, path = "").map {
+        gitHubService.getRepoContents[RepoContents](login = login, repoName = repoName, path = "").value.map {
             case Some(Right(repoContents: Seq[RepoContents])) => Ok(views.html.viewRepoContents(login, repoName, repoContents, ""))
             case Some(Left(error: APIError)) => Status(error.httpResponseStatus)(Json.toJson(error.reason))
             case None => Status(400)(Json.toJson("This repo content does not exist."))
@@ -82,12 +79,13 @@ class GitHubController @Inject()(val controllerComponents: ControllerComponents,
     }
 
     def getGitHubRepoContents(login: String, repoName: String, path: String): Action[AnyContent] = Action.async { implicit request =>
-        gitHubService.getRepoContents[RepoFile](login = login, repoName = repoName, path = path).flatMap {
+        gitHubService.getRepoContents[RepoFile](login = login, repoName = repoName, path = path).value.flatMap {
             case Some(Right(Seq(repoFile: RepoFile))) => Future(Ok(views.html.viewRepoFile(login, repoName, repoFile)))
             case Some(Right(repoContent)) => Future(Status(400)(Json.toJson(s"Incorrectly fetched content: $repoContent")))
             case Some(Left(error: APIError)) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
-            case None => gitHubService.getRepoContents[RepoContents](login = login, repoName = repoName, path = path).flatMap {
-                case Some(Right(repoContents: Seq[RepoContents])) => Future(Ok(views.html.viewRepoContents(login, repoName, repoContents, "")))
+
+            case None => gitHubService.getRepoContents[RepoContents](login = login, repoName = repoName, path = path).value.flatMap {
+                case Some(Right(repoContents: Seq[RepoContents])) => Future(Ok(views.html.viewRepoContents(login, repoName, repoContents, path)))
                 case Some(Left(error: APIError)) => Future(Status(error.httpResponseStatus)(Json.toJson(error.reason)))
                 case None => Future(Status(400)(Json.toJson("This repo content does not exist.")))
             }
