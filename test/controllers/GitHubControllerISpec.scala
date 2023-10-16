@@ -361,8 +361,8 @@ class GitHubControllerISpec extends BaseSpecWithApplication {
             val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos/COMP0031-PlantBot")
             val readResult: Future[Result] = TestGitHubController.getGitHubRepo("Aashvins", "COMP0031-PlantBot")(readRequest)
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
+            status(readResult) shouldBe Status.BAD_REQUEST
+            contentAsJson(readResult) shouldBe Json.toJson("This repo content does not exist.")
 
             afterEach()
         }
@@ -401,8 +401,8 @@ class GitHubControllerISpec extends BaseSpecWithApplication {
             val readRequest: FakeRequest[AnyContent] = buildGet(s"/github/users/Aashvins/repos/COMP0031-PlantBot/README.md")
             val readResult: Future[Result] = TestGitHubController.getGitHubRepoContents("Aashvins", "COMP0031-PlantBot", "README.md")(readRequest)
 
-            status(readResult) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(readResult) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
+            status(readResult) shouldBe Status.BAD_REQUEST
+            contentAsJson(readResult) shouldBe Json.toJson("This repo content does not exist.")
 
             afterEach()
         }

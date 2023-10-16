@@ -1,7 +1,7 @@
 package services
 
-import baseSpec.BaseSpec
-import cats.data.EitherT
+import baseSpec.{BaseSpec, BaseSpecWithApplication}
+import cats.data.{EitherT, OptionT}
 import connectors.GitHubConnector
 import models.{APIError, Owner, Repo, RepoContents, RepoFile, User}
 import org.scalamock.scalatest.MockFactory
@@ -15,6 +15,8 @@ class GitHubServiceSpec extends BaseSpec with MockFactory with ScalaFutures with
     val mockConnector: GitHubConnector = mock[GitHubConnector]
     implicit val executionContext: ExecutionContext = app.injector.instanceOf[ExecutionContext]
     val testService = new GitHubService(mockConnector)
+//    implicit val rds: OFormat[RepoContents] = app.injector.instanceOf[OFormat[RepoContents]]
+//    implicit val rdsFile: OFormat[RepoFile] = app.injector.instanceOf[OFormat[RepoFile]]
 
     val someUser: JsValue = Json.obj(
         "login" -> "someLogin",
@@ -120,81 +122,81 @@ class GitHubServiceSpec extends BaseSpec with MockFactory with ScalaFutures with
         val url: String = "testUrl"
 
         "return a sequence of repo contents" in {
-            (mockConnector.getRepoContents[RepoContents](_: String)(_: OFormat[RepoContents], _: ExecutionContext))
-                .expects(url, *, *)
-                .returning(EitherT.rightT[Future, APIError](someRepoContents))
+            (mockConnector.getRepoContents(_: String)(_: ExecutionContext))
+                .expects(url, *)
+                .returning(EitherT.rightT[Future, APIError](Json.toJson(someRepoContents)))
                 .once()
 
-            whenReady(testService.getRepoContents(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = None).value) { result =>
-                result shouldBe Right(someRepoContents)
+            whenReady(testService.getRepoContents[RepoContents](urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "").value) { result =>
+                result shouldBe Some(Right(someRepoContents))
             }
         }
 
         "return a connection error" in {
             val url: String = "testUrl"
 
-            (mockConnector.getRepoContents[RepoContents](_: String)(_: OFormat[RepoContents], _: ExecutionContext))
-                .expects(url, *, *)
-                .returning(EitherT.leftT[Future, Seq[RepoContents]](APIError.BadAPIResponse(500, "Could not connect.")))
+            (mockConnector.getRepoContents(_: String)(_: ExecutionContext))
+                .expects(url, *)
+                .returning(EitherT.leftT[Future, JsValue](APIError.BadAPIResponse(500, "Could not connect.")))
                 .once()
 
-            whenReady(testService.getRepoContents(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = None).value) { result =>
-                result shouldBe Left(APIError.BadAPIResponse(500, "Could not connect."))
+            whenReady(testService.getRepoContents[RepoContents](urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "").value) { result =>
+                result shouldBe Some(Left(APIError.BadAPIResponse(500, "Could not connect.")))
             }
         }
 
-        "return a can't find path error" in {
+        "return none" in {
             val url: String = "testUrl"
 
-            (mockConnector.getRepoContents[RepoContents](_: String)(_: OFormat[RepoContents], _: ExecutionContext))
-                .expects(url, *, *)
-                .returning(EitherT.leftT[Future, Seq[RepoContents]](APIError.BadAPIResponse(400, "This repo contents path does not exist.")))
+            (mockConnector.getRepoContents(_: String)(_: ExecutionContext))
+                .expects(url, *)
+                .returning(EitherT.rightT[Future, APIError](Json.obj()))
                 .once()
 
-            whenReady(testService.getRepoContents(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = None).value) { result =>
-                result shouldBe Left(APIError.BadAPIResponse(400, "This repo contents path does not exist."))
+            whenReady(testService.getRepoContents[RepoContents](urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "somePath").value) { result =>
+                result shouldBe None
             }
         }
     }
 
-    "GitHubService .getRepoFile()" should {
-        val url: String = "testUrl"
-
-        "return a repo file" in {
-            (mockConnector.getRepoFile[RepoFile](_: String)(_: OFormat[RepoFile], _: ExecutionContext))
-                .expects(url, *, *)
-                .returning(EitherT.rightT[Future, APIError](repoFile))
-                .once()
-
-            whenReady(testService.getRepoFile(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "somePath").value) { result =>
-                result shouldBe Right(repoFile)
-            }
-        }
-
-        "return a connection error" in {
-            val url: String = "testUrl"
-
-            (mockConnector.getRepoFile[RepoFile](_: String)(_: OFormat[RepoFile], _: ExecutionContext))
-                .expects(url, *, *)
-                .returning(EitherT.leftT[Future, RepoFile](APIError.BadAPIResponse(500, "Could not connect.")))
-                .once()
-
-            whenReady(testService.getRepoFile(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "somePath").value) { result =>
-                result shouldBe Left(APIError.BadAPIResponse(500, "Could not connect."))
-            }
-        }
-
-        "return a can't find path error" in {
-            val url: String = "testUrl"
-
-            (mockConnector.getRepoFile[RepoFile](_: String)(_: OFormat[RepoFile], _: ExecutionContext))
-                .expects(url, *, *)
-                .returning(EitherT.leftT[Future, RepoFile](APIError.BadAPIResponse(400, "This repo file does not exist.")))
-                .once()
-
-            whenReady(testService.getRepoFile(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "somePath").value) { result =>
-                result shouldBe Left(APIError.BadAPIResponse(400, "This repo file does not exist."))
-            }
-        }
-    }
+//    "GitHubService .getRepoFile()" should {
+//        val url: String = "testUrl"
+//
+//        "return a repo file" in {
+//            (mockConnector.getRepoFile[RepoFile](_: String)(_: OFormat[RepoFile], _: ExecutionContext))
+//                .expects(url, *, *)
+//                .returning(EitherT.rightT[Future, APIError](repoFile))
+//                .once()
+//
+//            whenReady(testService.getRepoFile(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "somePath").value) { result =>
+//                result shouldBe Right(repoFile)
+//            }
+//        }
+//
+//        "return a connection error" in {
+//            val url: String = "testUrl"
+//
+//            (mockConnector.getRepoFile[RepoFile](_: String)(_: OFormat[RepoFile], _: ExecutionContext))
+//                .expects(url, *, *)
+//                .returning(EitherT.leftT[Future, RepoFile](APIError.BadAPIResponse(500, "Could not connect.")))
+//                .once()
+//
+//            whenReady(testService.getRepoFile(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "somePath").value) { result =>
+//                result shouldBe Left(APIError.BadAPIResponse(500, "Could not connect."))
+//            }
+//        }
+//
+//        "return a can't find path error" in {
+//            val url: String = "testUrl"
+//
+//            (mockConnector.getRepoFile[RepoFile](_: String)(_: OFormat[RepoFile], _: ExecutionContext))
+//                .expects(url, *, *)
+//                .returning(EitherT.leftT[Future, RepoFile](APIError.BadAPIResponse(400, "This repo file does not exist.")))
+//                .once()
+//
+//            whenReady(testService.getRepoFile(urlOverride = Some(url), login = "someLogin", repoName = "someRepo", path = "somePath").value) { result =>
+//                result shouldBe Left(APIError.BadAPIResponse(400, "This repo file does not exist."))
+//            }
+//        }
+//    }
 }

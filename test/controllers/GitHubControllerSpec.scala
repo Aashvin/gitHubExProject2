@@ -1,10 +1,10 @@
 package controllers
 
 import baseSpec.BaseSpecWithApplication
-import cats.data.EitherT
+import cats.data.{EitherT, OptionT}
 import models.{APIError, Owner, Repo, RepoContents, RepoFile, User}
 import play.api.http.Status
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsValue, Json, OFormat}
 import play.api.test.FakeRequest
 import play.api.mvc.{AnyContent, Request, Result}
 import play.api.test.Helpers.{contentAsJson, contentAsString, defaultAwaitTimeout, redirectLocation, status}
@@ -18,6 +18,8 @@ class GitHubControllerSpec extends BaseSpecWithApplication with MockFactory with
     val mockRepoService: RepositoryService = mock[RepositoryService]
     val mockGitHubService: GitHubService = mock[GitHubService]
     val TestGitHubController: GitHubController = new GitHubController(component, mockRepoService, mockGitHubService)
+//    implicit val rdsContents: OFormat[RepoContents] = app.injector.instanceOf[OFormat[RepoContents]]
+//    implicit val rdsFile: OFormat[RepoFile] = app.injector.instanceOf[OFormat[RepoFile]]
 
     private val testUser: User = User(
         "testLogin",
@@ -432,9 +434,9 @@ class GitHubControllerSpec extends BaseSpecWithApplication with MockFactory with
 
             val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo")
 
-            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
-                .expects(None, "testUser", "testRepo", None, executionContext)
-                .returning(EitherT.rightT(sequenceOfRepoContents))
+            (mockGitHubService.getRepoContents[RepoContents](_: Option[String], _: String, _: String, _: String)(_: OFormat[RepoContents], _: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "", *, executionContext)
+                .returning(OptionT.some(Right(sequenceOfRepoContents)))
                 .once()
 
             val result: Future[Result] = TestGitHubController.getGitHubRepo("testUser", "testRepo")(request)
@@ -450,9 +452,9 @@ class GitHubControllerSpec extends BaseSpecWithApplication with MockFactory with
 
             val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/repoDoesNotExist")
 
-            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
-                .expects(None, "testUser", "repoDoesNotExist", None, executionContext)
-                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo contents path does not exist.")))
+            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: String)(_: OFormat[RepoContents], _: ExecutionContext))
+                .expects(None, "testUser", "repoDoesNotExist", "", *, executionContext)
+                .returning(OptionT.some(Left(APIError.BadAPIResponse(400, "This repo contents path does not exist."))))
                 .once()
 
             val result: Future[Result] = TestGitHubController.getGitHubRepo("testUser", "repoDoesNotExist")(request)
@@ -471,9 +473,9 @@ class GitHubControllerSpec extends BaseSpecWithApplication with MockFactory with
 
             val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo/testFile")
 
-            (mockGitHubService.getRepoFile(_: Option[String], _: String, _: String, _: String)(_: ExecutionContext))
-                .expects(None, "testUser", "testRepo", "testFile", executionContext)
-                .returning(EitherT.rightT(testRepoFile))
+            (mockGitHubService.getRepoContents[RepoFile](_: Option[String], _: String, _: String, _: String)(_: OFormat[RepoFile], _: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "testFile", *, executionContext)
+                .returning(OptionT.some(Right(Seq(testRepoFile))))
                 .once()
 
             val result: Future[Result] = TestGitHubController.getGitHubRepoContents("testUser", "testRepo", "testFile")(request)
@@ -489,14 +491,14 @@ class GitHubControllerSpec extends BaseSpecWithApplication with MockFactory with
 
             val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo/testDir")
 
-            (mockGitHubService.getRepoFile(_: Option[String], _: String, _: String, _: String)(_: ExecutionContext))
-                .expects(None, "testUser", "testRepo", "testDir", executionContext)
-                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo file does not exist.")))
+            (mockGitHubService.getRepoContents[RepoFile](_: Option[String], _: String, _: String, _: String)(_: OFormat[RepoFile], _: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "testDir", *, executionContext)
+                .returning(OptionT.none)
                 .once()
 
-            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
-                .expects(None, "testUser", "testRepo", Some("testDir"), executionContext)
-                .returning(EitherT.rightT(sequenceOfRepoContents))
+            (mockGitHubService.getRepoContents[RepoContents](_: Option[String], _: String, _: String, _: String)(_: OFormat[RepoContents], _: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "testDir", *, executionContext)
+                .returning(OptionT.some(Right(sequenceOfRepoContents)))
                 .once()
 
             val result: Future[Result] = TestGitHubController.getGitHubRepoContents("testUser", "testRepo", "testDir")(request)
@@ -507,25 +509,31 @@ class GitHubControllerSpec extends BaseSpecWithApplication with MockFactory with
             afterEach()
         }
 
-        "give a repo contents path does not exist error" in {
+        "give a repo contents does not exist error" in {
             beforeEach()
 
             val request: FakeRequest[AnyContent] = buildGet(s"/github/users/testUser/repos/testRepo/content/does/not/exist")
 
-            (mockGitHubService.getRepoFile(_: Option[String], _: String, _: String, _: String)(_: ExecutionContext))
-                .expects(None, "testUser", "testRepo", "content/does/not/exist", executionContext)
-                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo file does not exist.")))
+            (mockGitHubService.getRepoContents[RepoFile](_: Option[String], _: String, _: String, _: String)(_: OFormat[RepoFile], _: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "content/does/not/exist", *, executionContext)
+                .returning(OptionT.none)
                 .once()
 
-            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
-                .expects(None, "testUser", "testRepo", Some("content/does/not/exist"), executionContext)
-                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo contents path does not exist.")))
+            (mockGitHubService.getRepoContents[RepoContents](_: Option[String], _: String, _: String, _: String)(_: OFormat[RepoContents], _: ExecutionContext))
+                .expects(None, "testUser", "testRepo", "content/does/not/exist", *, executionContext)
+                .returning(OptionT.none)
                 .once()
+
+//            (mockGitHubService.getRepoContents(_: Option[String], _: String, _: String, _: Option[String])(_: ExecutionContext))
+//                .expects(None, "testUser", "testRepo", Some("content/does/not/exist"), executionContext)
+//                .returning(EitherT.leftT(APIError.BadAPIResponse(400, "This repo contents path does not exist.")))
+//                .once()
 
             val result: Future[Result] = TestGitHubController.getGitHubRepoContents("testUser", "testRepo", "content/does/not/exist")(request)
 
-            status(result) shouldBe Status.INTERNAL_SERVER_ERROR
-            contentAsJson(result) shouldBe Json.toJson("Bad response from upstream; got status: 400, and got reason This repo contents path does not exist.")
+            println(contentAsString(result))
+            status(result) shouldBe Status.BAD_REQUEST
+            contentAsJson(result) shouldBe Json.toJson("This repo content does not exist.")
 
             afterEach()
         }
